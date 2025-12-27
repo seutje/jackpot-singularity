@@ -1,0 +1,5 @@
+{
+  "name": "Jackpot Singularity",
+  "description": "A cyberpunk physics roguelike coin pusher running in the browser using Three.js and Rapier.",
+  "requestFramePermissions": []
+}
