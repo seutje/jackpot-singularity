@@ -206,37 +206,29 @@ const App: React.FC = () => {
     const config = COIN_CONFIG[type];
     lastScoreTimeRef.current = Date.now(); // Reset decay timer
 
-    setGameState(prev => {
-      const multArtifact = prev.artifacts.find(a => a.id === 'mult');
-      const level = multArtifact ? multArtifact.level : 0;
-      const scoreMult = Math.pow(1.5, level);
+    const state = gameStateRef.current;
+    const multArtifact = state.artifacts.find(a => a.id === 'mult');
+    const level = multArtifact ? multArtifact.level : 0;
+    const scoreMult = Math.pow(1.5, level);
 
-      // Calculate Bonus Increase
-      // Flat 4% per coin. 25 coins to fill.
-      let newBonus = prev.bonus + 4;
-      let bonusTriggered = false;
+    // Calculate Bonus Increase
+    // Flat 4% per coin. 25 coins to fill.
+    let newBonus = state.bonus + 4;
 
-      if (newBonus >= 100) {
-        newBonus = 0;
-        bonusTriggered = true;
-      }
+    if (newBonus >= 100) {
+      newBonus = 0;
+      // Trigger the jackpot effect (now safely once)
+      setTimeout(() => {
+        triggerJackpot();
+      }, 0);
+    }
 
-      if (bonusTriggered) {
-        // We need to trigger the jackpot effect. 
-        // Since we are inside a state update, we can't easily call triggerJackpot directly 
-        // without side effects. We'll use a timeout to break out of the state reducer.
-        setTimeout(() => {
-          triggerJackpot();
-        }, 0);
-      }
-
-      return {
-        ...prev,
-        score: prev.score + Math.floor(config.score * scoreMult),
-        cash: prev.cash + config.value,
-        bonus: newBonus
-      };
-    });
+    setGameState(prev => ({
+      ...prev,
+      score: prev.score + Math.floor(config.score * scoreMult),
+      cash: prev.cash + config.value,
+      bonus: newBonus
+    }));
     playSound('collect');
   }, [triggerJackpot]);
 
