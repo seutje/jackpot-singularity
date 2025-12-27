@@ -16,6 +16,7 @@ const INITIAL_STATE: GameState = {
   deck: { ...INITIAL_DECK },
   artifacts: [],
   bonus: 0,
+  bonusLevel: 1,
 };
 
 const App: React.FC = () => {
@@ -49,7 +50,12 @@ const App: React.FC = () => {
         setGameState(prev => {
           if (prev.bonus <= 0) return prev;
           // Decay rate: ~20% per second (running at 100ms interval = 2 per tick)
-          return { ...prev, bonus: Math.max(0, prev.bonus - 2) };
+          const nextBonus = Math.max(0, prev.bonus - 2);
+          return { 
+            ...prev, 
+            bonus: nextBonus,
+            bonusLevel: nextBonus === 0 ? 1 : prev.bonusLevel
+          };
         });
       }
     }, 100);
@@ -116,10 +122,12 @@ const App: React.FC = () => {
     spawnCoin(type, false);
   };
 
-  const triggerJackpot = useCallback(() => {
+  const triggerJackpot = useCallback((bonusLevel: number) => {
     playSound('jackpot');
-    // Drop 10 coins with slight stagger
-    for (let i = 0; i < 10; i++) {
+    const bonusMult = 1 + 0.1 * (bonusLevel - 1);
+    const jackpotCoins = Math.max(1, Math.round(10 * bonusMult));
+    // Drop jackpot coins with slight stagger
+    for (let i = 0; i < jackpotCoins; i++) {
       setTimeout(() => {
         spawnCoin(CoinType.STANDARD, true);
       }, i * 150);
@@ -210,24 +218,28 @@ const App: React.FC = () => {
     const multArtifact = state.artifacts.find(a => a.id === 'mult');
     const level = multArtifact ? multArtifact.level : 0;
     const scoreMult = Math.pow(1.5, level);
+    const bonusMult = 1 + 0.1 * (state.bonusLevel - 1);
 
     // Calculate Bonus Increase
     // Flat 4% per coin. 25 coins to fill.
     let newBonus = state.bonus + 4;
+    let nextBonusLevel = state.bonusLevel;
 
     if (newBonus >= 100) {
       newBonus = 0;
+      nextBonusLevel = state.bonusLevel + 1;
       // Trigger the jackpot effect (now safely once)
       setTimeout(() => {
-        triggerJackpot();
+        triggerJackpot(nextBonusLevel);
       }, 0);
     }
 
     setGameState(prev => ({
       ...prev,
-      score: prev.score + Math.floor(config.score * scoreMult),
+      score: prev.score + Math.floor(config.score * scoreMult * bonusMult),
       cash: prev.cash + config.value,
-      bonus: newBonus
+      bonus: newBonus,
+      bonusLevel: nextBonusLevel
     }));
     playSound('collect');
   }, [triggerJackpot]);
@@ -238,7 +250,8 @@ const App: React.FC = () => {
         ...prev,
         phase: GamePhase.SHOP,
         score: 0,
-        bonus: 0 // Reset bonus between rounds
+        bonus: 0, // Reset bonus between rounds
+        bonusLevel: 1
       }));
     } else {
       setGameState(prev => ({ ...prev, phase: GamePhase.GAME_OVER }));

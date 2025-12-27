@@ -62,4 +62,5 @@ export interface GameState {
   deck: Record<CoinType, number>; // Count of each coin type in hand
   artifacts: Artifact[];
   bonus: number; // 0 to 100 momentum meter
+  bonusLevel: number; // Starts at 1, increments per full bonus meter
 }
