@@ -23,6 +23,7 @@ const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
   const [activeCoins, setActiveCoins] = useState<CoinData[]>([]);
   const [timeScale, setTimeScale] = useState<number>(1);
+  const [isTabActive, setIsTabActive] = useState<boolean>(true);
 
   // Track last score time for bonus decay logic
   const lastScoreTimeRef = useRef<number>(Date.now());
@@ -40,10 +41,9 @@ const App: React.FC = () => {
 
   // --- BONUS METER DECAY LOGIC ---
   useEffect(() => {
-    const decayInterval = setInterval(() => {
-      // Only run decay during Playing phase
-      if (gameState.phase !== GamePhase.PLAYING) return;
+    if (gameState.phase !== GamePhase.PLAYING || !isTabActive) return;
 
+    const decayInterval = setInterval(() => {
       const now = Date.now();
       // If 2 seconds have passed since last score
       if (now - lastScoreTimeRef.current > 2000) {
@@ -61,7 +61,25 @@ const App: React.FC = () => {
     }, 100);
 
     return () => clearInterval(decayInterval);
-  }, [gameState.phase]);
+  }, [gameState.phase, isTabActive]);
+
+  useEffect(() => {
+    const updateTabActive = () => {
+      const active = !document.hidden && document.hasFocus();
+      setIsTabActive(active);
+    };
+
+    updateTabActive();
+    document.addEventListener('visibilitychange', updateTabActive);
+    window.addEventListener('focus', updateTabActive);
+    window.addEventListener('blur', updateTabActive);
+
+    return () => {
+      document.removeEventListener('visibilitychange', updateTabActive);
+      window.removeEventListener('focus', updateTabActive);
+      window.removeEventListener('blur', updateTabActive);
+    };
+  }, []);
 
   const startGame = () => {
     setGameState({ ...INITIAL_STATE, phase: GamePhase.PLAYING });
@@ -315,6 +333,7 @@ const App: React.FC = () => {
           phase={gameState.phase}
           artifacts={gameState.artifacts}
           timeScale={timeScale}
+          isTabActive={isTabActive}
         />
       </div>
 

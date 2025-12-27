@@ -81,38 +81,36 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
   const baseAngularDamping = 2.0 + (magnetLevel * 2.0);
 
   const handleCollision = (payload: any, coin: CoinData) => {
-    const other = payload.other.rigidBodyObject;
-    if (!other || !other.name) return;
+    const otherBody = payload.other.rigidBodyObject;
+    if (!otherBody) return;
+    const otherUserData = otherBody.userData as { coinId?: string; coinType?: CoinType } | undefined;
+    const otherCoinId = otherUserData?.coinId;
+    const otherCoinType = otherUserData?.coinType;
 
     // --- COIN-TO-COIN INTERACTIONS ---
-    if (other.name.startsWith('coin-')) {
-        const parts = other.name.split('-');
-        const otherType = parts[1] as CoinType;
-        // Fix: Reconstruct ID properly by joining all parts after the type
-        const otherId = parts.slice(2).join('-');
-
+    if (otherCoinId && otherCoinType) {
         // 1. SEED + WATER -> TREE
-        if ((coin.type === CoinType.SEED && otherType === CoinType.WATER) ||
-            (coin.type === CoinType.WATER && otherType === CoinType.SEED)) {
+        if ((coin.type === CoinType.SEED && otherCoinType === CoinType.WATER) ||
+            (coin.type === CoinType.WATER && otherCoinType === CoinType.SEED)) {
             // Only fire if coin.id < otherId to prevent double firing for the pair
-            if (coin.id < otherId) {
-                onInteraction(coin.id, otherId, CoinType.TREE);
+            if (coin.id < otherCoinId) {
+                onInteraction(coin.id, otherCoinId, CoinType.TREE);
             }
         }
 
         // 2. MAGMA + ICE -> OBSIDIAN
-        if ((coin.type === CoinType.MAGMA && otherType === CoinType.ICE) ||
-            (coin.type === CoinType.ICE && otherType === CoinType.MAGMA)) {
-            if (coin.id < otherId) {
-                onInteraction(coin.id, otherId, CoinType.OBSIDIAN);
+        if ((coin.type === CoinType.MAGMA && otherCoinType === CoinType.ICE) ||
+            (coin.type === CoinType.ICE && otherCoinType === CoinType.MAGMA)) {
+            if (coin.id < otherCoinId) {
+                onInteraction(coin.id, otherCoinId, CoinType.OBSIDIAN);
             }
         }
 
         // 3. KEY + CHEST -> DIAMOND
-        if ((coin.type === CoinType.KEY && otherType === CoinType.CHEST) ||
-            (coin.type === CoinType.CHEST && otherType === CoinType.KEY)) {
-             if (coin.id < otherId) {
-                onInteraction(coin.id, otherId, CoinType.DIAMOND);
+        if ((coin.type === CoinType.KEY && otherCoinType === CoinType.CHEST) ||
+            (coin.type === CoinType.CHEST && otherCoinType === CoinType.KEY)) {
+             if (coin.id < otherCoinId) {
+                onInteraction(coin.id, otherCoinId, CoinType.DIAMOND);
              }
         }
     }
@@ -120,7 +118,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
     // --- SPLITTER LOGIC ---
     // If hitting the pusher and hasn't split yet
     if (coin.type === CoinType.SPLITTER && !coin.hasSplit) {
-        if (other.name === 'pusher') {
+        if (otherBody.name === 'pusher') {
              const contact = payload.manifold.solverContactPoint(0);
              if (contact) {
                  onSplit(coin.id, new THREE.Vector3(contact.x, contact.y + 1, contact.z));
@@ -130,11 +128,8 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
 
     // --- MIDAS LOGIC ---
     if (coin.type === CoinType.GOLD) { 
-        if (other.name && other.name.startsWith('coin-STANDARD')) {
-             const parts = other.name.split('-');
-             // Fix: Reconstruct ID properly by joining all parts after the type
-             const otherId = parts.slice(2).join('-');
-             onTransmute(otherId);
+        if (otherCoinType === CoinType.STANDARD && otherCoinId) {
+             onTransmute(otherCoinId);
         }
     }
 
@@ -218,6 +213,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
             <RigidBody 
                 key={coin.id} 
                 name={`coin-${coin.type}-${coin.id}`}
+                userData={{ coinId: coin.id, coinType: coin.type }}
                 position={coin.position} 
                 rotation={coin.rotation as any}
                 // Removed colliders="hull" in favor of explicit CylinderCollider below

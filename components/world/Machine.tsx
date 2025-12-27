@@ -151,12 +151,9 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
         sensor 
         onIntersectionEnter={(payload) => {
             const rigidBody = payload.other.rigidBodyObject;
-            if (rigidBody && rigidBody.name.startsWith('coin-')) {
-                const parts = rigidBody.name.split('-'); 
-                const type = parts[1] as CoinType;
-                // Reconstruct full ID including hyphens
-                const id = parts.slice(2).join('-');
-                onCoinCollected(id, type);
+            const userData = rigidBody?.userData as { coinId?: string; coinType?: CoinType } | undefined;
+            if (userData?.coinId && userData?.coinType) {
+                onCoinCollected(userData.coinId, userData.coinType);
             }
         }}
       />
