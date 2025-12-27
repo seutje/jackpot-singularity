@@ -11,11 +11,11 @@ import { useEffect, useRef, useCallback } from 'react';
  * @param minInterval Maximum speed (minimum interval) in ms (default 30ms).
  */
 const useRepeatAction = (
-    callback: () => void, 
-    disabled: boolean, 
-    baseInterval: number = 150,
-    accelerationDelay: number = 500,
-    minInterval: number = 30
+  callback: () => void,
+  disabled: boolean,
+  baseInterval: number = 150,
+  accelerationDelay: number = 500,
+  minInterval: number = 30
 ) => {
   const timerRef = useRef<number | null>(null);
   const callbackRef = useRef(callback);
@@ -36,7 +36,7 @@ const useRepeatAction = (
   // Stop if disabled state changes while holding
   useEffect(() => {
     if (disabled) {
-        stop();
+      stop();
     }
   }, [disabled, stop]);
 
@@ -47,33 +47,38 @@ const useRepeatAction = (
 
   const start = useCallback((e: React.SyntheticEvent) => {
     if (disabled) return;
-    
+
+    // Use preventDefault to stop touch events from also triggering mouse events
+    if (e.cancelable) {
+      e.preventDefault();
+    }
+
     // Execute immediately once
     callbackRef.current();
     startTimeRef.current = Date.now();
 
     // Start the recursive loop
     const runLoop = () => {
-        const elapsed = Date.now() - startTimeRef.current;
-        let currentDelay = baseInterval;
+      const elapsed = Date.now() - startTimeRef.current;
+      let currentDelay = baseInterval;
 
-        // Acceleration Logic
-        if (elapsed > accelerationDelay) {
-            const timePastThreshold = elapsed - accelerationDelay;
-            // Accelerate over 2 seconds to max speed
-            const rampUpDuration = 2000; 
-            const decay = Math.max(0, 1 - (timePastThreshold / rampUpDuration));
-            // Linearly interpolate between baseInterval and minInterval based on decay
-            currentDelay = minInterval + (baseInterval - minInterval) * decay;
+      // Acceleration Logic
+      if (elapsed > accelerationDelay) {
+        const timePastThreshold = elapsed - accelerationDelay;
+        // Accelerate over 2 seconds to max speed
+        const rampUpDuration = 2000;
+        const decay = Math.max(0, 1 - (timePastThreshold / rampUpDuration));
+        // Linearly interpolate between baseInterval and minInterval based on decay
+        currentDelay = minInterval + (baseInterval - minInterval) * decay;
+      }
+
+      timerRef.current = window.setTimeout(() => {
+        // Check if we were stopped in the meantime via disabled prop effect
+        if (timerRef.current !== null) {
+          callbackRef.current();
+          runLoop();
         }
-
-        timerRef.current = window.setTimeout(() => {
-             // Check if we were stopped in the meantime via disabled prop effect
-             if (timerRef.current !== null) {
-                callbackRef.current();
-                runLoop();
-             }
-        }, currentDelay);
+      }, currentDelay);
     };
 
     runLoop();
