@@ -13,17 +13,63 @@ interface CoinsProps {
   magnetLevel?: number;
 }
 
-// Geometry and Materials reused for performance
-const coinGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.15, 32);
+// Geometry and materials reused for performance.
+const coinGeometry = new THREE.CylinderGeometry(0.6, 0.6, 0.15, 24);
+
+const coinVertexShader = `
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vec4 worldPos = modelMatrix * vec4(position, 1.0);
+    vWorldPos = worldPos.xyz;
+    vNormal = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * viewMatrix * worldPos;
+  }
+`;
+
+const coinFragmentShader = `
+  uniform vec3 uColor;
+  uniform vec3 uLightDir;
+  uniform float uAmbient;
+  uniform float uSpecular;
+  uniform float uShininess;
+  uniform float uRim;
+
+  varying vec3 vNormal;
+  varying vec3 vWorldPos;
+
+  void main() {
+    vec3 normal = normalize(vNormal);
+    vec3 lightDir = normalize(uLightDir);
+
+    float diff = max(dot(normal, lightDir), 0.0);
+    vec3 viewDir = normalize(cameraPosition - vWorldPos);
+    vec3 halfDir = normalize(lightDir + viewDir);
+    float spec = pow(max(dot(normal, halfDir), 0.0), uShininess) * uSpecular;
+    float rim = pow(1.0 - max(dot(viewDir, normal), 0.0), 2.0) * uRim;
+
+    vec3 color = uColor * (uAmbient + diff) + vec3(spec) + (uColor * rim);
+    gl_FragColor = vec4(color, 1.0);
+  }
+`;
+
 const materials = Object.values(CoinType).reduce((acc, type) => {
-    const config = COIN_CONFIG[type];
-    acc[type] = new THREE.MeshStandardMaterial({ 
-        color: config.color, 
-        metalness: 0.8, 
-        roughness: 0.3 
-    });
-    return acc;
-}, {} as Record<CoinType, THREE.MeshStandardMaterial>);
+  const config = COIN_CONFIG[type];
+  acc[type] = new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(config.color) },
+      uLightDir: { value: new THREE.Vector3(0.35, 1.0, 0.4) },
+      uAmbient: { value: 0.35 },
+      uSpecular: { value: 0.35 },
+      uShininess: { value: 32.0 },
+      uRim: { value: 0.2 }
+    },
+    vertexShader: coinVertexShader,
+    fragmentShader: coinFragmentShader
+  });
+  return acc;
+}, {} as Record<CoinType, THREE.ShaderMaterial>);
 
 
 const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, onInteraction, magnetLevel = 0 }) => {
