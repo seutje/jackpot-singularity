@@ -130,6 +130,7 @@ const CoinItem = React.memo(
         angularDamping={baseAngularDamping}
         onCollisionEnter={handleCollisionEnter}
         canSleep={true}
+        ccd
       >
         {/* Visual Mesh */}
         <mesh
