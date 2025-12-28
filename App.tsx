@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { GamePhase, GameState, CoinType, Artifact, CoinData } from './types';
 import { INITIAL_DECK, COIN_CONFIG, SHOP_ARTIFACTS } from './constants';
 import Scene3D from './components/Scene3D';
@@ -21,7 +21,13 @@ const INITIAL_STATE: GameState = {
 
 const App: React.FC = () => {
   const [gameState, setGameState] = useState<GameState>(INITIAL_STATE);
-  const [activeCoins, setActiveCoins] = useState<CoinData[]>([]);
+  const [coinState, setCoinState] = useState<{
+    coinMap: Map<string, CoinData>;
+    coinOrder: string[];
+  }>({
+    coinMap: new Map(),
+    coinOrder: []
+  });
   const [timeScale, setTimeScale] = useState<number>(1);
   const [isTabActive, setIsTabActive] = useState<boolean>(true);
 
@@ -33,6 +39,12 @@ const App: React.FC = () => {
   useEffect(() => {
     gameStateRef.current = gameState;
   }, [gameState]);
+
+  const activeCoins = useMemo(() => {
+    return coinState.coinOrder
+      .map(id => coinState.coinMap.get(id))
+      .filter((coin): coin is CoinData => Boolean(coin));
+  }, [coinState]);
 
   // Sound effects stub (would use AudioContext in full prod)
   const playSound = (type: 'drop' | 'collect' | 'win' | 'explode' | 'powerup' | 'jackpot') => {
@@ -97,7 +109,10 @@ const App: React.FC = () => {
       rotation: [0, Math.random() * Math.PI * 2, 0]
     }));
 
-    setActiveCoins(initialCoins);
+    setCoinState({
+      coinMap: new Map(initialCoins.map(coin => [coin.id, coin])),
+      coinOrder: initialCoins.map(coin => coin.id)
+    });
   };
 
   // Helper to spawn a coin (used by UI click and Jackpot)
@@ -124,7 +139,10 @@ const App: React.FC = () => {
     };
 
     // Update Active Coins
-    setActiveCoins(currentCoins => [...currentCoins, newCoin]);
+    setCoinState(prev => ({
+      coinMap: new Map(prev.coinMap).set(newCoin.id, newCoin),
+      coinOrder: [...prev.coinOrder, newCoin.id]
+    }));
 
     // Update Game State (Deck and Audio)
     setGameState(prev => {
@@ -144,25 +162,36 @@ const App: React.FC = () => {
     playSound('jackpot');
     const bonusMult = 1 + 0.1 * (bonusLevel - 1);
     const jackpotCoins = Math.max(1, Math.round(10 * bonusMult));
-    // Drop jackpot coins with slight stagger
-    for (let i = 0; i < jackpotCoins; i++) {
-      setTimeout(() => {
-        spawnCoin(CoinType.STANDARD, true);
-      }, i * 150);
-    }
-  }, [spawnCoin]);
+    const extender = gameStateRef.current.artifacts.find(a => a.id === 'extender');
+    const extenderLevel = extender ? extender.level : 0;
+    const dropWidth = 8 + (extenderLevel * 4);
+    const newCoins: CoinData[] = Array.from({ length: jackpotCoins }).map(() => {
+      const xPos = (Math.random() - 0.5) * dropWidth;
+      const zPos = (Math.random() * 3) - 1.5;
+      const yPos = 8 + Math.random() * 2;
+      return {
+        id: `bonus-${Math.random().toString(36).substr(2, 9)}`,
+        type: CoinType.STANDARD,
+        position: [xPos, yPos, zPos],
+        rotation: [0, Math.random() * Math.PI * 2, 0]
+      };
+    });
+
+    setCoinState(prev => ({
+      coinMap: new Map([...prev.coinMap, ...newCoins.map(coin => [coin.id, coin] as const)]),
+      coinOrder: [...prev.coinOrder, ...newCoins.map(coin => coin.id)]
+    }));
+  }, []);
 
   // --- COIN MECHANICS HANDLERS ---
 
   const handleSplit = useCallback((id: string, position: THREE.Vector3) => {
-    setActiveCoins(prev => {
-      // Find original to mark as split
-      const index = prev.findIndex(c => c.id === id);
-      if (index === -1) return prev;
-      if (prev[index].hasSplit) return prev; // Already split
+    setCoinState(prev => {
+      const original = prev.coinMap.get(id);
+      if (!original || original.hasSplit) return prev; // Already split or missing
 
-      const updated = [...prev];
-      updated[index] = { ...updated[index], hasSplit: true };
+      const coinMap = new Map(prev.coinMap);
+      coinMap.set(id, { ...original, hasSplit: true });
 
       // Create clone
       const clone: CoinData = {
@@ -173,37 +202,51 @@ const App: React.FC = () => {
         rotation: [0, Math.random() * Math.PI * 2, 0]
       };
 
+      coinMap.set(clone.id, clone);
       playSound('powerup');
-      return [...updated, clone];
+      return {
+        coinMap,
+        coinOrder: [...prev.coinOrder, clone.id]
+      };
     });
   }, []);
 
   const handleExplode = useCallback((id: string) => {
-    setActiveCoins(prev => prev.filter(c => c.id !== id));
+    setCoinState(prev => {
+      if (!prev.coinMap.has(id)) return prev;
+      const coinMap = new Map(prev.coinMap);
+      coinMap.delete(id);
+      return {
+        coinMap,
+        coinOrder: prev.coinOrder.filter(coinId => coinId !== id)
+      };
+    });
     playSound('explode');
   }, []);
 
   const handleTransmute = useCallback((targetId: string) => {
-    setActiveCoins(prev => {
-      const index = prev.findIndex(c => c.id === targetId);
-      if (index === -1) return prev;
-      if (prev[index].type === CoinType.GOLD) return prev; // Already gold
+    setCoinState(prev => {
+      const target = prev.coinMap.get(targetId);
+      if (!target) return prev;
+      if (target.type === CoinType.GOLD) return prev; // Already gold
 
-      const updated = [...prev];
-      updated[index] = { ...updated[index], type: CoinType.GOLD };
+      const coinMap = new Map(prev.coinMap);
+      coinMap.set(targetId, { ...target, type: CoinType.GOLD });
       playSound('powerup');
-      return updated;
+      return { ...prev, coinMap };
     });
   }, []);
 
   const handleCoinInteraction = useCallback((id1: string, id2: string, resultType: CoinType) => {
-    setActiveCoins(prev => {
-      const coin1 = prev.find(c => c.id === id1);
-      const coin2 = prev.find(c => c.id === id2);
+    setCoinState(prev => {
+      const coin1 = prev.coinMap.get(id1);
+      const coin2 = prev.coinMap.get(id2);
 
       if (!coin1 || !coin2) return prev;
 
-      const remaining = prev.filter(c => c.id !== id1 && c.id !== id2);
+      const coinMap = new Map(prev.coinMap);
+      coinMap.delete(id1);
+      coinMap.delete(id2);
 
       const newPos: [number, number, number] = [
         (coin1.position[0] + coin2.position[0]) / 2,
@@ -218,8 +261,15 @@ const App: React.FC = () => {
         rotation: [0, 0, 0]
       };
 
+      coinMap.set(newCoin.id, newCoin);
       playSound('powerup');
-      return [...remaining, newCoin];
+      return {
+        coinMap,
+        coinOrder: [
+          ...prev.coinOrder.filter(coinId => coinId !== id1 && coinId !== id2),
+          newCoin.id
+        ]
+      };
     });
   }, []);
 
@@ -227,7 +277,15 @@ const App: React.FC = () => {
 
   const handleCoinCollected = useCallback((id: string, type: CoinType) => {
     // Remove the collected coin from the active array
-    setActiveCoins(prev => prev.filter(c => c.id !== id));
+    setCoinState(prev => {
+      if (!prev.coinMap.has(id)) return prev;
+      const coinMap = new Map(prev.coinMap);
+      coinMap.delete(id);
+      return {
+        coinMap,
+        coinOrder: prev.coinOrder.filter(coinId => coinId !== id)
+      };
+    });
 
     const config = COIN_CONFIG[type];
     lastScoreTimeRef.current = Date.now(); // Reset decay timer
@@ -387,7 +445,7 @@ const App: React.FC = () => {
             <button
               onClick={() => {
                 setGameState(INITIAL_STATE);
-                setActiveCoins([]);
+                setCoinState({ coinMap: new Map(), coinOrder: [] });
               }}
               className="flex items-center gap-2 px-6 py-3 bg-white text-red-900 font-bold hover:bg-gray-200"
             >
