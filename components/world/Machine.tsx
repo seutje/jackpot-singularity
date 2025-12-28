@@ -28,20 +28,14 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
       const frequency = 1.5;
       const offset = -2;
 
-      // Desired Position (for drift correction)
+      // Desired Position
       const targetZ = amplitude * Math.sin(frequency * t) + offset;
-      
-      // Desired Velocity (Derivative)
-      // v = 2 * 1.5 * cos(1.5 * t) = 3 * cos(1.5 * t)
-      const velocityZ = amplitude * frequency * Math.cos(frequency * t);
-
-      // Drift Correction (P-Controller)
-      const currentZ = pusherRef.current.translation().z;
-      const error = targetZ - currentZ;
-      const correctionK = 5.0; // Tuning parameter to snap back to path
-      const correctedVelocity = velocityZ + (error * correctionK);
-
-      pusherRef.current.setLinvel({ x: 0, y: 0, z: correctedVelocity }, true);
+      const currentTranslation = pusherRef.current.translation();
+      pusherRef.current.setNextKinematicTranslation({
+        x: currentTranslation.x,
+        y: currentTranslation.y,
+        z: targetZ
+      });
     }
   });
 
@@ -112,12 +106,12 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
         </mesh>
       </RigidBody>
 
-      {/* --- The Pusher (Kinematic Velocity) --- */}
+      {/* --- The Pusher (Kinematic Position) --- */}
       <RigidBody 
         key={`pusher-${dimKey}`}
         ref={pusherRef} 
         name="pusher"
-        type="kinematicVelocity" 
+        type="kinematicPosition" 
         position={[0, 0.8, 0]} 
         colliders="hull" 
         friction={0.1}

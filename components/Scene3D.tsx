@@ -29,8 +29,6 @@ const PhysicsStepper: React.FC<{ steps: number, active: boolean }> = ({ steps, a
         
         // The default Physics component handles the first step and the sync.
         // We manually perform (steps - 1) additional steps to speed up simulation.
-        // Since we are using kinematicVelocity for the pusher, the velocity persists 
-        // across these extra steps, moving the pusher further per frame.
         for (let i = 0; i < steps - 1; i++) {
             world.step();
         }
