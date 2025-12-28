@@ -60,6 +60,9 @@ const Scene3D: React.FC<Scene3DProps> = ({
 
   const isShopOpen = phase === GamePhase.SHOP;
   const isPaused = isShopOpen || !isTabActive;
+  const baseSteps = Math.max(1, Math.floor(timeScale));
+  const loadFactor = Math.max(1, Math.ceil(activeCoins.length / 75));
+  const effectiveSteps = Math.max(1, Math.floor(baseSteps / loadFactor));
 
   return (
     <Canvas shadows dpr={[1, 2]}>
@@ -109,7 +112,7 @@ const Scene3D: React.FC<Scene3DProps> = ({
            PhysicsStepper adds extra steps if timeScale > 1.
         */}
         <Physics gravity={[0, -19.62, 0]} timeStep={1/60} paused={isPaused}>
-          <PhysicsStepper steps={timeScale} active={!isPaused} />
+          <PhysicsStepper steps={effectiveSteps} active={!isPaused} />
           
           <Machine 
              onCoinCollected={onCoinCollected} 
