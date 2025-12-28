@@ -72,6 +72,90 @@ const materials = Object.values(CoinType).reduce((acc, type) => {
   return acc;
 }, {} as Record<CoinType, THREE.ShaderMaterial>);
 
+const areArraysEqual = (a: readonly number[], b: readonly number[]) =>
+  a.length === b.length && a.every((value, index) => value === b[index]);
+
+const getMass = (type: CoinType) => {
+  switch (type) {
+    case CoinType.HEAVY:
+      return 5;
+    case CoinType.OBSIDIAN:
+      return 8; // Very heavy
+    case CoinType.TREE:
+      return 4;
+    default:
+      return 1;
+  }
+};
+
+const getFriction = (type: CoinType) => {
+  if (type === CoinType.ICE) return 0.05; // Slippery
+  if (type === CoinType.OBSIDIAN) return 1.0; // Rough
+  return 0.4; // Slightly reduced from 0.6 to prevent stick-slip jitter
+};
+
+interface CoinItemProps {
+  coin: CoinData;
+  baseLinearDamping: number;
+  baseAngularDamping: number;
+  onCollisionEnter: (payload: any, coin: CoinData) => void;
+}
+
+const CoinItem = React.memo(
+  ({ coin, baseLinearDamping, baseAngularDamping, onCollisionEnter }: CoinItemProps) => {
+    const scale = React.useMemo(
+      () => (coin.type === CoinType.TREE || coin.type === CoinType.OBSIDIAN ? [1.2, 1.2, 1.2] : [1, 1, 1]),
+      [coin.type]
+    );
+
+    const handleCollisionEnter = React.useCallback(
+      (payload: any) => {
+        onCollisionEnter(payload, coin);
+      },
+      [coin, onCollisionEnter]
+    );
+
+    return (
+      <RigidBody
+        key={coin.id}
+        name={`coin-${coin.type}-${coin.id}`}
+        userData={{ coinId: coin.id, coinType: coin.type }}
+        position={coin.position}
+        rotation={coin.rotation as any}
+        // Removed colliders="hull" in favor of explicit CylinderCollider below
+        colliders={false}
+        friction={getFriction(coin.type)}
+        mass={getMass(coin.type)}
+        restitution={coin.type === CoinType.SPLITTER ? 0.8 : 0.05}
+        linearDamping={baseLinearDamping}
+        angularDamping={baseAngularDamping}
+        onCollisionEnter={handleCollisionEnter}
+        canSleep={true}
+      >
+        {/* Visual Mesh */}
+        <mesh
+          geometry={coinGeometry}
+          material={materials[coin.type]}
+          castShadow
+          receiveShadow
+          scale={scale}
+        />
+
+        {/* Physical Collider - Exact Cylinder Shape for stability */}
+        {/* args: [halfHeight, radius] */}
+        <CylinderCollider args={[0.075, 0.6]} />
+      </RigidBody>
+    );
+  },
+  (prevProps, nextProps) =>
+    prevProps.baseLinearDamping === nextProps.baseLinearDamping &&
+    prevProps.baseAngularDamping === nextProps.baseAngularDamping &&
+    prevProps.coin.id === nextProps.coin.id &&
+    prevProps.coin.type === nextProps.coin.type &&
+    prevProps.coin.hasSplit === nextProps.coin.hasSplit &&
+    areArraysEqual(prevProps.coin.position, nextProps.coin.position) &&
+    areArraysEqual(prevProps.coin.rotation, nextProps.coin.rotation)
+);
 
 const interactionResults: Partial<Record<CoinType, Partial<Record<CoinType, CoinType>>>> = {
   [CoinType.SEED]: { [CoinType.WATER]: CoinType.TREE },
@@ -142,86 +226,24 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
     pending.explosions.clear();
   });
 
-  const queueInteraction = (id1: string, id2: string, result: CoinType) => {
+  const queueInteraction = React.useCallback((id1: string, id2: string, result: CoinType) => {
     const key = `${id1}:${id2}:${result}`;
     pendingEventsRef.current.interactions.set(key, { id1, id2, result });
-  };
+  }, []);
 
-  const queueSplit = (id: string, position: THREE.Vector3) => {
+  const queueSplit = React.useCallback((id: string, position: THREE.Vector3) => {
     pendingEventsRef.current.splits.set(id, { id, position });
-  };
+  }, []);
 
-  const queueTransmute = (targetId: string) => {
+  const queueTransmute = React.useCallback((targetId: string) => {
     pendingEventsRef.current.transmutations.add(targetId);
-  };
+  }, []);
 
-  const queueExplosion = (id: string) => {
+  const queueExplosion = React.useCallback((id: string) => {
     pendingEventsRef.current.explosions.add(id);
-  };
+  }, []);
 
-  const handleCollision = (payload: any, coin: CoinData) => {
-    if (!activeCollisionCoinTypes.has(coin.type)) {
-      return;
-    }
-
-    const otherBody = payload.other.rigidBodyObject;
-    if (!otherBody) return;
-    const shouldCheckOtherCoin = interactionCoinTypes.has(coin.type) || coin.type === CoinType.GOLD;
-    const otherUserData = shouldCheckOtherCoin
-      ? (otherBody.userData as { coinId?: string; coinType?: CoinType } | undefined)
-      : undefined;
-    const otherCoinId = otherUserData?.coinId;
-    const otherCoinType = otherUserData?.coinType;
-
-    // --- COIN-TO-COIN INTERACTIONS ---
-    if (otherCoinId && otherCoinType && interactionCoinTypes.has(coin.type)) {
-      const result = interactionResults[coin.type]?.[otherCoinType];
-      if (result && coin.id < otherCoinId) {
-        queueInteraction(coin.id, otherCoinId, result);
-      }
-    }
-
-    // --- SPLITTER LOGIC ---
-    // If hitting the pusher and hasn't split yet
-    if (coin.type === CoinType.SPLITTER && !coin.hasSplit) {
-        if (otherBody.name === 'pusher') {
-             const contact = payload.manifold.solverContactPoint(0);
-             if (contact) {
-                 queueSplit(coin.id, new THREE.Vector3(contact.x, contact.y + 1, contact.z));
-             }
-        }
-    }
-
-    // --- MIDAS LOGIC ---
-    if (coin.type === CoinType.GOLD) { 
-        if (otherCoinType === CoinType.STANDARD && otherCoinId) {
-             queueTransmute(otherCoinId);
-        }
-    }
-
-    // --- BOMB LOGIC ---
-    if (coin.type === CoinType.BOMB) {
-        // Use relative velocity as a proxy for impact intensity.
-        const selfBody = payload.target.rigidBody;
-        const otherBody = payload.other.rigidBody;
-        
-        if (selfBody) {
-             const v1 = selfBody.linvel();
-             const v2 = otherBody ? otherBody.linvel() : {x:0, y:0, z:0};
-             
-             const dx = v1.x - v2.x;
-             const dy = v1.y - v2.y;
-             const dz = v1.z - v2.z;
-             const speedSq = dx*dx + dy*dy + dz*dz;
-
-             if (speedSq > 25) {
-                 triggerExplosion(coin.id, selfBody);
-             }
-        }
-    }
-  };
-
-  const triggerExplosion = (id: string, body: RapierRigidBody) => {
+  const triggerExplosion = React.useCallback((id: string, body: RapierRigidBody) => {
     if (!body) return;
     const position = body.translation();
     
@@ -255,58 +277,84 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
     });
 
     queueExplosion(id);
-  };
+  }, [queueExplosion, world]);
 
-  const getMass = (type: CoinType) => {
-      switch(type) {
-          case CoinType.HEAVY: return 5;
-          case CoinType.OBSIDIAN: return 8; // Very heavy
-          case CoinType.TREE: return 4;
-          default: return 1;
+  const handleCollision = React.useCallback(
+    (payload: any, coin: CoinData) => {
+      if (!activeCollisionCoinTypes.has(coin.type)) {
+        return;
       }
-  };
 
-  const getFriction = (type: CoinType) => {
-      if (type === CoinType.ICE) return 0.05; // Slippery
-      if (type === CoinType.OBSIDIAN) return 1.0; // Rough
-      return 0.4; // Slightly reduced from 0.6 to prevent stick-slip jitter
-  }
+      const otherBody = payload.other.rigidBodyObject;
+      if (!otherBody) return;
+      const shouldCheckOtherCoin = interactionCoinTypes.has(coin.type) || coin.type === CoinType.GOLD;
+      const otherUserData = shouldCheckOtherCoin
+        ? (otherBody.userData as { coinId?: string; coinType?: CoinType } | undefined)
+        : undefined;
+      const otherCoinId = otherUserData?.coinId;
+      const otherCoinType = otherUserData?.coinType;
+
+      // --- COIN-TO-COIN INTERACTIONS ---
+      if (otherCoinId && otherCoinType && interactionCoinTypes.has(coin.type)) {
+        const result = interactionResults[coin.type]?.[otherCoinType];
+        if (result && coin.id < otherCoinId) {
+          queueInteraction(coin.id, otherCoinId, result);
+        }
+      }
+
+      // --- SPLITTER LOGIC ---
+      // If hitting the pusher and hasn't split yet
+      if (coin.type === CoinType.SPLITTER && !coin.hasSplit) {
+        if (otherBody.name === 'pusher') {
+          const contact = payload.manifold.solverContactPoint(0);
+          if (contact) {
+            queueSplit(coin.id, new THREE.Vector3(contact.x, contact.y + 1, contact.z));
+          }
+        }
+      }
+
+      // --- MIDAS LOGIC ---
+      if (coin.type === CoinType.GOLD) {
+        if (otherCoinType === CoinType.STANDARD && otherCoinId) {
+          queueTransmute(otherCoinId);
+        }
+      }
+
+      // --- BOMB LOGIC ---
+      if (coin.type === CoinType.BOMB) {
+        // Use relative velocity as a proxy for impact intensity.
+        const selfBody = payload.target.rigidBody;
+        const otherRigidBody = payload.other.rigidBody;
+
+        if (selfBody) {
+          const v1 = selfBody.linvel();
+          const v2 = otherRigidBody ? otherRigidBody.linvel() : { x: 0, y: 0, z: 0 };
+
+          const dx = v1.x - v2.x;
+          const dy = v1.y - v2.y;
+          const dz = v1.z - v2.z;
+          const speedSq = dx * dx + dy * dy + dz * dz;
+
+          if (speedSq > 25) {
+            triggerExplosion(coin.id, selfBody);
+          }
+        }
+      }
+    },
+    [queueInteraction, queueSplit, queueTransmute, triggerExplosion]
+  );
 
   return (
     <>
-      {coins.map((coin) => {
-        return (
-            <RigidBody 
-                key={coin.id} 
-                name={`coin-${coin.type}-${coin.id}`}
-                userData={{ coinId: coin.id, coinType: coin.type }}
-                position={coin.position} 
-                rotation={coin.rotation as any}
-                // Removed colliders="hull" in favor of explicit CylinderCollider below
-                colliders={false}
-                friction={getFriction(coin.type)}
-                mass={getMass(coin.type)}
-                restitution={coin.type === CoinType.SPLITTER ? 0.8 : 0.05}
-                linearDamping={baseLinearDamping}
-                angularDamping={baseAngularDamping}
-                onCollisionEnter={(payload) => handleCollision(payload, coin)}
-                canSleep={true}
-            >
-                {/* Visual Mesh */}
-                <mesh 
-                    geometry={coinGeometry} 
-                    material={materials[coin.type]} 
-                    castShadow 
-                    receiveShadow
-                    scale={coin.type === CoinType.TREE || coin.type === CoinType.OBSIDIAN ? [1.2, 1.2, 1.2] : [1,1,1]}
-                />
-                
-                {/* Physical Collider - Exact Cylinder Shape for stability */}
-                {/* args: [halfHeight, radius] */}
-                <CylinderCollider args={[0.075, 0.6]} />
-            </RigidBody>
-        );
-      })}
+      {coins.map((coin) => (
+        <CoinItem
+          key={coin.id}
+          coin={coin}
+          baseLinearDamping={baseLinearDamping}
+          baseAngularDamping={baseAngularDamping}
+          onCollisionEnter={handleCollision}
+        />
+      ))}
     </>
   );
 };
