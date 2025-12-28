@@ -67,6 +67,8 @@ const Scene3D: React.FC<Scene3DProps> = ({
   // Determine active upgrades and their levels
   const magnetArtifact = artifacts.find(a => a.id === 'magnet');
   const magnetLevel = magnetArtifact ? magnetArtifact.level : 0;
+  const gravityScale = Math.pow(1.5, magnetLevel);
+  const gravityStrength = -19.62 * gravityScale;
 
   const extenderArtifact = artifacts.find(a => a.id === 'extender');
   const extenderLevel = extenderArtifact ? extenderArtifact.level : 0;
@@ -124,7 +126,7 @@ const Scene3D: React.FC<Scene3DProps> = ({
            Otherwise, it runs its default loop (1 step per frame + Sync).
            PhysicsStepper adds extra steps if timeScale > 1.
         */}
-        <Physics gravity={[0, -19.62, 0]} timeStep={1/60} paused={isPaused}>
+        <Physics gravity={[0, gravityStrength, 0]} timeStep={1/60} paused={isPaused}>
           <PhysicsStepper steps={effectiveSteps} active={!isPaused} />
           <PhysicsClock steps={effectiveSteps} active={!isPaused} onTick={onPhysicsTick} />
           
@@ -139,7 +141,6 @@ const Scene3D: React.FC<Scene3DProps> = ({
             onExplode={onExplode} 
             onTransmute={onTransmute}
             onInteraction={onInteraction}
-            magnetLevel={magnetLevel}
           />
         </Physics>
         

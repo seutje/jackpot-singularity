@@ -172,7 +172,7 @@ export const INITIAL_DECK = {
 };
 
 export const SHOP_ARTIFACTS: Artifact[] = [
-  { id: 'magnet', name: 'Flux Magnet', description: 'Coins settle faster per level.', cost: 300, active: false, level: 0 },
+  { id: 'magnet', name: 'Flux Magnet', description: 'Gravity increases by 50% per level.', cost: 300, active: false, level: 0 },
   { id: 'extender', name: 'Bed Extender', description: 'Widens playing area.', cost: 500, active: false, level: 0 },
   { id: 'mult', name: 'Score Multiplier', description: 'Score x1.5 per level.', cost: 800, active: false, level: 0 },
 ];

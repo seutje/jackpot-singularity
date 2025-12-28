@@ -11,7 +11,6 @@ interface CoinsProps {
   onExplode: (id: string) => void;
   onTransmute: (targetId: string) => void;
   onInteraction: (id1: string, id2: string, result: CoinType) => void;
-  magnetLevel?: number;
 }
 
 // Geometry and materials reused for performance.
@@ -182,7 +181,7 @@ const activeCollisionCoinTypes = new Set<CoinType>([
   CoinType.BOMB
 ]);
 
-const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, onInteraction, magnetLevel = 0 }) => {
+const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, onInteraction }) => {
   const { world } = useRapier();
   const pendingEventsRef = React.useRef({
     interactions: new Map<string, { id1: string; id2: string; result: CoinType }>(),
@@ -193,8 +192,8 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
 
   // Increased base damping to prevent jitter (coins settle faster)
   // Base 2.0 (was 0.5).
-  const baseLinearDamping = 2.0 + (magnetLevel * 2.0);
-  const baseAngularDamping = 2.0 + (magnetLevel * 2.0);
+  const baseLinearDamping = 2.0;
+  const baseAngularDamping = 2.0;
 
   useFrame(() => {
     const pending = pendingEventsRef.current;
