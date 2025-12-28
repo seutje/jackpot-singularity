@@ -1,4 +1,5 @@
 import React from 'react';
+import { useFrame } from '@react-three/fiber';
 import { RigidBody, useRapier, RapierRigidBody, CylinderCollider } from '@react-three/rapier';
 import { CoinType, CoinData } from '../../types';
 import { COIN_CONFIG } from '../../constants';
@@ -72,47 +73,112 @@ const materials = Object.values(CoinType).reduce((acc, type) => {
 }, {} as Record<CoinType, THREE.ShaderMaterial>);
 
 
+const interactionResults: Partial<Record<CoinType, Partial<Record<CoinType, CoinType>>>> = {
+  [CoinType.SEED]: { [CoinType.WATER]: CoinType.TREE },
+  [CoinType.WATER]: { [CoinType.SEED]: CoinType.TREE },
+  [CoinType.MAGMA]: { [CoinType.ICE]: CoinType.OBSIDIAN },
+  [CoinType.ICE]: { [CoinType.MAGMA]: CoinType.OBSIDIAN },
+  [CoinType.KEY]: { [CoinType.CHEST]: CoinType.DIAMOND },
+  [CoinType.CHEST]: { [CoinType.KEY]: CoinType.DIAMOND }
+};
+
+const interactionCoinTypes = new Set<CoinType>([
+  CoinType.SEED,
+  CoinType.WATER,
+  CoinType.MAGMA,
+  CoinType.ICE,
+  CoinType.KEY,
+  CoinType.CHEST
+]);
+
+const activeCollisionCoinTypes = new Set<CoinType>([
+  ...interactionCoinTypes,
+  CoinType.SPLITTER,
+  CoinType.GOLD,
+  CoinType.BOMB
+]);
+
 const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, onInteraction, magnetLevel = 0 }) => {
   const { world } = useRapier();
+  const pendingEventsRef = React.useRef({
+    interactions: new Map<string, { id1: string; id2: string; result: CoinType }>(),
+    splits: new Map<string, { id: string; position: THREE.Vector3 }>(),
+    transmutations: new Set<string>(),
+    explosions: new Set<string>()
+  });
 
   // Increased base damping to prevent jitter (coins settle faster)
   // Base 2.0 (was 0.5).
   const baseLinearDamping = 2.0 + (magnetLevel * 2.0);
   const baseAngularDamping = 2.0 + (magnetLevel * 2.0);
 
+  useFrame(() => {
+    const pending = pendingEventsRef.current;
+    if (
+      pending.interactions.size === 0 &&
+      pending.splits.size === 0 &&
+      pending.transmutations.size === 0 &&
+      pending.explosions.size === 0
+    ) {
+      return;
+    }
+
+    pending.interactions.forEach(({ id1, id2, result }) => {
+      onInteraction(id1, id2, result);
+    });
+    pending.splits.forEach(({ id, position }) => {
+      onSplit(id, position);
+    });
+    pending.transmutations.forEach((targetId) => {
+      onTransmute(targetId);
+    });
+    pending.explosions.forEach((id) => {
+      onExplode(id);
+    });
+
+    pending.interactions.clear();
+    pending.splits.clear();
+    pending.transmutations.clear();
+    pending.explosions.clear();
+  });
+
+  const queueInteraction = (id1: string, id2: string, result: CoinType) => {
+    const key = `${id1}:${id2}:${result}`;
+    pendingEventsRef.current.interactions.set(key, { id1, id2, result });
+  };
+
+  const queueSplit = (id: string, position: THREE.Vector3) => {
+    pendingEventsRef.current.splits.set(id, { id, position });
+  };
+
+  const queueTransmute = (targetId: string) => {
+    pendingEventsRef.current.transmutations.add(targetId);
+  };
+
+  const queueExplosion = (id: string) => {
+    pendingEventsRef.current.explosions.add(id);
+  };
+
   const handleCollision = (payload: any, coin: CoinData) => {
+    if (!activeCollisionCoinTypes.has(coin.type)) {
+      return;
+    }
+
     const otherBody = payload.other.rigidBodyObject;
     if (!otherBody) return;
-    const otherUserData = otherBody.userData as { coinId?: string; coinType?: CoinType } | undefined;
+    const shouldCheckOtherCoin = interactionCoinTypes.has(coin.type) || coin.type === CoinType.GOLD;
+    const otherUserData = shouldCheckOtherCoin
+      ? (otherBody.userData as { coinId?: string; coinType?: CoinType } | undefined)
+      : undefined;
     const otherCoinId = otherUserData?.coinId;
     const otherCoinType = otherUserData?.coinType;
 
     // --- COIN-TO-COIN INTERACTIONS ---
-    if (otherCoinId && otherCoinType) {
-        // 1. SEED + WATER -> TREE
-        if ((coin.type === CoinType.SEED && otherCoinType === CoinType.WATER) ||
-            (coin.type === CoinType.WATER && otherCoinType === CoinType.SEED)) {
-            // Only fire if coin.id < otherId to prevent double firing for the pair
-            if (coin.id < otherCoinId) {
-                onInteraction(coin.id, otherCoinId, CoinType.TREE);
-            }
-        }
-
-        // 2. MAGMA + ICE -> OBSIDIAN
-        if ((coin.type === CoinType.MAGMA && otherCoinType === CoinType.ICE) ||
-            (coin.type === CoinType.ICE && otherCoinType === CoinType.MAGMA)) {
-            if (coin.id < otherCoinId) {
-                onInteraction(coin.id, otherCoinId, CoinType.OBSIDIAN);
-            }
-        }
-
-        // 3. KEY + CHEST -> DIAMOND
-        if ((coin.type === CoinType.KEY && otherCoinType === CoinType.CHEST) ||
-            (coin.type === CoinType.CHEST && otherCoinType === CoinType.KEY)) {
-             if (coin.id < otherCoinId) {
-                onInteraction(coin.id, otherCoinId, CoinType.DIAMOND);
-             }
-        }
+    if (otherCoinId && otherCoinType && interactionCoinTypes.has(coin.type)) {
+      const result = interactionResults[coin.type]?.[otherCoinType];
+      if (result && coin.id < otherCoinId) {
+        queueInteraction(coin.id, otherCoinId, result);
+      }
     }
 
     // --- SPLITTER LOGIC ---
@@ -121,7 +187,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
         if (otherBody.name === 'pusher') {
              const contact = payload.manifold.solverContactPoint(0);
              if (contact) {
-                 onSplit(coin.id, new THREE.Vector3(contact.x, contact.y + 1, contact.z));
+                 queueSplit(coin.id, new THREE.Vector3(contact.x, contact.y + 1, contact.z));
              }
         }
     }
@@ -129,7 +195,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
     // --- MIDAS LOGIC ---
     if (coin.type === CoinType.GOLD) { 
         if (otherCoinType === CoinType.STANDARD && otherCoinId) {
-             onTransmute(otherCoinId);
+             queueTransmute(otherCoinId);
         }
     }
 
@@ -188,7 +254,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
         }
     });
 
-    onExplode(id);
+    queueExplosion(id);
   };
 
   const getMass = (type: CoinType) => {
