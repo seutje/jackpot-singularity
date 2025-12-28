@@ -194,7 +194,7 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
   // Increased base damping to prevent jitter (coins settle faster)
   // Base 2.0 (was 0.5).
   const baseLinearDamping = 2.0;
-  const baseAngularDamping = 2.0;
+  const baseAngularDamping = 10.0;
 
   useFrame(() => {
     const pending = pendingEventsRef.current;
@@ -246,34 +246,34 @@ const Coins: React.FC<CoinsProps> = ({ coins, onSplit, onExplode, onTransmute, o
   const triggerExplosion = React.useCallback((id: string, body: RapierRigidBody) => {
     if (!body) return;
     const position = body.translation();
-    
+
     // Apply impulse to nearby bodies
     const explosionRadius = 8;
     const explosionForce = 8; // Reduced from 30 to ~1/4
 
     world.forEachRigidBody((otherBody) => {
-        if (otherBody.handle === body.handle) return;
-        
-        const otherPos = otherBody.translation();
-        const dist = Math.sqrt(
-            Math.pow(position.x - otherPos.x, 2) + 
-            Math.pow(position.y - otherPos.y, 2) + 
-            Math.pow(position.z - otherPos.z, 2)
-        );
+      if (otherBody.handle === body.handle) return;
 
-        if (dist < explosionRadius) {
-            const dir = {
-                x: (otherPos.x - position.x) / dist,
-                y: (otherPos.y - position.y) / dist + 0.5,
-                z: (otherPos.z - position.z) / dist
-            };
-            const force = (1 - dist / explosionRadius) * explosionForce;
-            otherBody.applyImpulse({
-                x: dir.x * force,
-                y: dir.y * force,
-                z: dir.z * force
-            }, true);
-        }
+      const otherPos = otherBody.translation();
+      const dist = Math.sqrt(
+        Math.pow(position.x - otherPos.x, 2) +
+        Math.pow(position.y - otherPos.y, 2) +
+        Math.pow(position.z - otherPos.z, 2)
+      );
+
+      if (dist < explosionRadius) {
+        const dir = {
+          x: (otherPos.x - position.x) / dist,
+          y: (otherPos.y - position.y) / dist + 0.5,
+          z: (otherPos.z - position.z) / dist
+        };
+        const force = (1 - dist / explosionRadius) * explosionForce;
+        otherBody.applyImpulse({
+          x: dir.x * force,
+          y: dir.y * force,
+          z: dir.z * force
+        }, true);
+      }
     });
 
     queueExplosion(id);
