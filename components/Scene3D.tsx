@@ -18,6 +18,7 @@ interface Scene3DProps {
   artifacts: Artifact[];
   timeScale: number;
   isTabActive: boolean;
+  onPhysicsTick: (deltaSeconds: number) => void;
 }
 
 const PhysicsStepper: React.FC<{ steps: number, active: boolean }> = ({ steps, active }) => {
@@ -38,6 +39,19 @@ const PhysicsStepper: React.FC<{ steps: number, active: boolean }> = ({ steps, a
     return null;
 };
 
+const PhysicsClock: React.FC<{ steps: number; active: boolean; onTick: (deltaSeconds: number) => void }> = ({
+  steps,
+  active,
+  onTick
+}) => {
+  useFrame(() => {
+    if (!active) return;
+    onTick((1 / 60) * steps);
+  });
+
+  return null;
+};
+
 const Scene3D: React.FC<Scene3DProps> = ({ 
     activeCoins, 
     onCoinCollected, 
@@ -48,7 +62,8 @@ const Scene3D: React.FC<Scene3DProps> = ({
     phase,
     artifacts,
     timeScale,
-    isTabActive
+    isTabActive,
+    onPhysicsTick
 }) => {
   
   // Determine active upgrades and their levels
@@ -113,6 +128,7 @@ const Scene3D: React.FC<Scene3DProps> = ({
         */}
         <Physics gravity={[0, -19.62, 0]} timeStep={1/60} paused={isPaused}>
           <PhysicsStepper steps={effectiveSteps} active={!isPaused} />
+          <PhysicsClock steps={effectiveSteps} active={!isPaused} onTick={onPhysicsTick} />
           
           <Machine 
              onCoinCollected={onCoinCollected} 

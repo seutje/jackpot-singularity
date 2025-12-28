@@ -31,8 +31,10 @@ const App: React.FC = () => {
   const [timeScale, setTimeScale] = useState<number>(1);
   const [isTabActive, setIsTabActive] = useState<boolean>(true);
 
-  // Track last score time for bonus decay logic
-  const lastScoreTimeRef = useRef<number>(Date.now());
+  // Track last score time for bonus decay logic (physics time seconds)
+  const physicsTimeRef = useRef<number>(0);
+  const lastScoreTimeRef = useRef<number>(0);
+  const lastBonusDecayTimeRef = useRef<number>(0);
   const gameStateRef = useRef<GameState>(gameState);
 
   // Sync ref with state
@@ -56,20 +58,28 @@ const App: React.FC = () => {
     if (gameState.phase !== GamePhase.PLAYING || !isTabActive) return;
 
     const decayInterval = setInterval(() => {
-      const now = Date.now();
-      // If 2 seconds have passed since last score
-      if (now - lastScoreTimeRef.current > 2000) {
-        setGameState(prev => {
-          if (prev.bonus <= 0) return prev;
-          // Decay rate: ~20% per second (running at 100ms interval = 2 per tick)
-          const nextBonus = Math.max(0, prev.bonus - 2);
-          return { 
-            ...prev, 
-            bonus: nextBonus,
-            bonusLevel: nextBonus === 0 ? 1 : prev.bonusLevel
-          };
-        });
+      const now = physicsTimeRef.current;
+      const sinceScore = now - lastScoreTimeRef.current;
+      if (sinceScore <= 2) {
+        lastBonusDecayTimeRef.current = now;
+        return;
       }
+
+      const decayDelta = now - lastBonusDecayTimeRef.current;
+      if (decayDelta <= 0) return;
+
+      const decayRatePerSecond = 20;
+      lastBonusDecayTimeRef.current = now;
+
+      setGameState(prev => {
+        if (prev.bonus <= 0) return prev;
+        const nextBonus = Math.max(0, prev.bonus - decayRatePerSecond * decayDelta);
+        return {
+          ...prev,
+          bonus: nextBonus,
+          bonusLevel: nextBonus === 0 ? 1 : prev.bonusLevel
+        };
+      });
     }, 100);
 
     return () => clearInterval(decayInterval);
@@ -93,9 +103,15 @@ const App: React.FC = () => {
     };
   }, []);
 
+  const handlePhysicsTick = useCallback((deltaSeconds: number) => {
+    physicsTimeRef.current += deltaSeconds;
+  }, []);
+
   const startGame = () => {
     setGameState({ ...INITIAL_STATE, phase: GamePhase.PLAYING });
-    lastScoreTimeRef.current = Date.now();
+    physicsTimeRef.current = 0;
+    lastScoreTimeRef.current = 0;
+    lastBonusDecayTimeRef.current = 0;
 
     // Pre-fill the machine with standard chips
     const initialCoins: CoinData[] = Array.from({ length: 60 }).map((_, i) => ({
@@ -288,7 +304,7 @@ const App: React.FC = () => {
     });
 
     const config = COIN_CONFIG[type];
-    lastScoreTimeRef.current = Date.now(); // Reset decay timer
+    lastScoreTimeRef.current = physicsTimeRef.current; // Reset decay timer
 
     const state = gameStateRef.current;
     const multArtifact = state.artifacts.find(a => a.id === 'mult');
@@ -341,7 +357,8 @@ const App: React.FC = () => {
       ante: prev.ante + 1,
       targetScore: Math.floor(prev.targetScore * 1.5),
     }));
-    lastScoreTimeRef.current = Date.now();
+    lastScoreTimeRef.current = physicsTimeRef.current;
+    lastBonusDecayTimeRef.current = physicsTimeRef.current;
   };
 
   const buyItem = (itemType: 'coin' | 'artifact', id: string, cost: number) => {
@@ -392,6 +409,7 @@ const App: React.FC = () => {
           artifacts={gameState.artifacts}
           timeScale={timeScale}
           isTabActive={isTabActive}
+          onPhysicsTick={handlePhysicsTick}
         />
       </div>
 
