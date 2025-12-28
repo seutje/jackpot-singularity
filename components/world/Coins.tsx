@@ -125,7 +125,7 @@ const CoinItem = React.memo(
         colliders={false}
         friction={getFriction(coin.type)}
         mass={getMass(coin.type)}
-        restitution={coin.type === CoinType.SPLITTER ? 0.8 : 0.05}
+        restitution={coin.type === CoinType.SPLITTER ? 0.3 : 0.01}
         linearDamping={baseLinearDamping}
         angularDamping={baseAngularDamping}
         onCollisionEnter={handleCollisionEnter}
