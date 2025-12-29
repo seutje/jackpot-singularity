@@ -353,7 +353,7 @@ const App: React.FC = () => {
     setGameState(prev => ({
       ...prev,
       score: prev.score + Math.floor(config.score * scoreMult * bonusMult),
-      cash: prev.cash + config.value,
+      cash: prev.cash + Math.floor(config.value * scoreMult),
       bonus: newBonus,
       bonusLevel: nextBonusLevel
     }));
