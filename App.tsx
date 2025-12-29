@@ -1,6 +1,6 @@
 import React, { useState, useCallback, useEffect, useMemo, useRef } from 'react';
 import { GamePhase, GameState, CoinType, Artifact, CoinData } from './types';
-import { INITIAL_DECK, COIN_CONFIG, SHOP_ARTIFACTS } from './constants';
+import { INITIAL_DECK, COIN_CONFIG, SHOP_ARTIFACTS, MACHINE_DIMENSIONS } from './constants';
 import Scene3D from './components/Scene3D';
 import GameHUD from './components/GameHUD';
 import Shop from './components/Shop';
@@ -141,7 +141,7 @@ const App: React.FC = () => {
     // Calculate Position
     const extender = state.artifacts.find(a => a.id === 'extender');
     const extenderLevel = extender ? extender.level : 0;
-    const dropWidth = 8 + (extenderLevel * 4);
+    const dropWidth = MACHINE_DIMENSIONS.baseDropWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
 
     const xPos = (Math.random() - 0.5) * dropWidth;
     const zPos = (Math.random() * 3) - 1.5;
@@ -177,10 +177,13 @@ const App: React.FC = () => {
   const triggerJackpot = useCallback((bonusLevel: number) => {
     playSound('jackpot');
     const bonusMult = 1 + 0.1 * (bonusLevel - 1);
-    const jackpotCoins = Math.max(1, Math.round(10 * bonusMult));
     const extender = gameStateRef.current.artifacts.find(a => a.id === 'extender');
     const extenderLevel = extender ? extender.level : 0;
-    const dropWidth = 8 + (extenderLevel * 4);
+    const dropWidth = MACHINE_DIMENSIONS.baseDropWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
+    const bedWidth = MACHINE_DIMENSIONS.baseWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
+    const bedAreaScale = (bedWidth * MACHINE_DIMENSIONS.bedLength) / (MACHINE_DIMENSIONS.baseWidth * MACHINE_DIMENSIONS.bedLength);
+    const maxJackpotCoins = Math.max(1, Math.round(12 * bedAreaScale));
+    const jackpotCoins = Math.min(maxJackpotCoins, Math.max(1, Math.round(10 * bonusMult)));
     const newCoins: CoinData[] = Array.from({ length: jackpotCoins }).map(() => {
       const xPos = (Math.random() - 0.5) * dropWidth;
       const zPos = (Math.random() * 3) - 1.5;

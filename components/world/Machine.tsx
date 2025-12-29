@@ -3,6 +3,7 @@ import { useFrame } from '@react-three/fiber';
 import { RigidBody, CuboidCollider, RapierRigidBody } from '@react-three/rapier';
 import * as THREE from 'three';
 import { CoinType } from '../../types';
+import { MACHINE_DIMENSIONS } from '../../constants';
 
 interface MachineProps {
   onCoinCollected: (id: string, type: CoinType) => void;
@@ -41,11 +42,11 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
 
   // Bed Dimensions Logic
   // Base width 10. Extender adds 4 units width per level.
-  const bedWidth = 10 + (extenderLevel * 4);
+  const bedWidth = MACHINE_DIMENSIONS.baseWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
   const halfBedWidth = bedWidth / 2;
 
   // Length stays constant now
-  const bedLength = 14; // Extends from -7 to +7
+  const bedLength = MACHINE_DIMENSIONS.bedLength; // Extends from -7 to +7
   const zCenter = 0;
 
   const killPlaneZ = 10;

@@ -176,3 +176,10 @@ export const SHOP_ARTIFACTS: Artifact[] = [
   { id: 'extender', name: 'Bed Extender', description: 'Widens playing area.', cost: 500, active: false, level: 0 },
   { id: 'mult', name: 'Score Multiplier', description: 'Score x1.5 per level.', cost: 800, active: false, level: 0 },
 ];
+
+export const MACHINE_DIMENSIONS = {
+  baseWidth: 10,
+  widthPerLevel: 4,
+  bedLength: 14,
+  baseDropWidth: 8,
+};
