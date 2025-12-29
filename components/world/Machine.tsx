@@ -113,8 +113,8 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
         ref={pusherRef}
         name="pusher"
         type="kinematicPosition"
-        position={[0, 0.8, 0]}
-        colliders="hull"
+        position={[0, 0.75, 0]}
+        colliders={false}
         friction={0.1}
         restitution={0}
       >
@@ -122,6 +122,8 @@ const Machine: React.FC<MachineProps> = ({ onCoinCollected, extenderLevel = 0, t
           <boxGeometry args={[pusherWidth, 1.5, 4]} />
           <meshStandardMaterial color="#333" metalness={0.9} roughness={0.1} />
         </mesh>
+        <CuboidCollider args={[pusherWidth / 2, 0.75, 2]} />
+        <CuboidCollider args={[pusherWidth / 2, 0.05, 0.7]} position={[0, -0.7, 1.6]} />
         {/* Pusher Front Face Glow */}
         <mesh position={[0, 0, 2.01]}>
           <planeGeometry args={[pusherWidth - 0.8, 1]} />
