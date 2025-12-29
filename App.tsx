@@ -182,14 +182,10 @@ const App: React.FC = () => {
 
   const triggerJackpot = useCallback((bonusLevel: number) => {
     playSound('jackpot');
-    const bonusMult = 1 + 0.1 * (bonusLevel - 1);
     const extender = gameStateRef.current.artifacts.find(a => a.id === 'extender');
     const extenderLevel = extender ? extender.level : 0;
     const dropWidth = MACHINE_DIMENSIONS.baseDropWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
-    const bedWidth = MACHINE_DIMENSIONS.baseWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
-    const bedWidthScale = bedWidth / MACHINE_DIMENSIONS.baseWidth;
-    const maxJackpotCoins = Math.max(1, Math.round(12 * bedWidthScale));
-    const jackpotCoins = Math.min(maxJackpotCoins, Math.max(1, Math.round(10 * bonusMult)));
+    const jackpotCoins = 10 + bonusLevel;
     const newCoins: CoinData[] = Array.from({ length: jackpotCoins }).map(() => {
       const xPos = (Math.random() - 0.5) * dropWidth;
       const zPos = (Math.random() * 3) - 1.5;
