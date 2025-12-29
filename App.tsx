@@ -28,7 +28,7 @@ const App: React.FC = () => {
     coinMap: new Map(),
     coinOrder: []
   });
-  const [timeScale, setTimeScale] = useState<number>(1);
+  const timeScale = 1;
   const [isTabActive, setIsTabActive] = useState<boolean>(true);
   const [queuedJackpots, setQueuedJackpots] = useState<number>(0);
 
@@ -467,8 +467,6 @@ const App: React.FC = () => {
             gameState={gameState}
             onDrop={handleCoinDrop}
             onEndRound={handleRoundEnd}
-            timeScale={timeScale}
-            setTimeScale={setTimeScale}
             queuedJackpots={queuedJackpots}
           />
         )}

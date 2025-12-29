@@ -1,15 +1,13 @@
 import React from 'react';
 import { GameState, CoinType } from '../types';
 import { COIN_CONFIG } from '../constants';
-import { StopCircle, FastForward, Zap } from 'lucide-react';
+import { StopCircle, Zap } from 'lucide-react';
 import useRepeatAction from '../hooks/useRepeatAction';
 
 interface GameHUDProps {
   gameState: GameState;
   onDrop: (type: CoinType) => void;
   onEndRound: () => void;
-  timeScale: number;
-  setTimeScale: (scale: number) => void;
   queuedJackpots: number;
 }
 
@@ -58,14 +56,14 @@ const CoinDropButton: React.FC<{
   );
 };
 
-const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, timeScale, setTimeScale, queuedJackpots }) => {
+const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, queuedJackpots }) => {
   const progress = Math.min(100, (gameState.score / gameState.targetScore) * 100);
   const bonusProgress = Math.min(100, gameState.bonus);
 
   return (
     <div className="w-full h-full flex flex-col justify-between p-4 pointer-events-none">
       
-      {/* Top Bar: Stats & Speed */}
+      {/* Top Bar: Stats */}
       <div className="flex justify-between items-start pointer-events-auto">
         <div className="flex flex-col gap-2">
             {/* Score Target */}
@@ -106,27 +104,6 @@ const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, timeSc
                     {Math.floor(bonusProgress)}%
                 </div>
             </div>
-        </div>
-
-        {/* Speed Controls */}
-        <div className="flex items-center gap-2 bg-slate-900/90 border border-gray-600 p-2 rounded-lg backdrop-blur h-fit">
-            <div className="text-xs text-gray-400 font-bold uppercase mr-2 flex items-center gap-1">
-                <FastForward size={14} /> Speed
-            </div>
-            {[1, 2, 5, 10].map(scale => (
-                <button 
-                    key={scale}
-                    onClick={() => setTimeScale(scale)}
-                    className={`
-                        px-3 py-1 text-xs font-mono font-bold rounded transition-colors
-                        ${timeScale === scale 
-                            ? 'bg-cyan-600 text-white shadow-[0_0_10px_rgba(8,145,178,0.5)]' 
-                            : 'bg-gray-800 text-gray-400 hover:bg-gray-700'}
-                    `}
-                >
-                    {scale}x
-                </button>
-            ))}
         </div>
 
         <div className="bg-slate-900/90 border border-yellow-500/50 p-4 rounded-lg backdrop-blur h-fit">
