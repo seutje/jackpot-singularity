@@ -30,11 +30,14 @@ const App: React.FC = () => {
   });
   const [timeScale, setTimeScale] = useState<number>(1);
   const [isTabActive, setIsTabActive] = useState<boolean>(true);
+  const [queuedJackpots, setQueuedJackpots] = useState<number>(0);
 
   // Track last score time for bonus decay logic (physics time seconds)
   const physicsTimeRef = useRef<number>(0);
   const lastScoreTimeRef = useRef<number>(0);
   const lastBonusDecayTimeRef = useRef<number>(0);
+  const lastJackpotTimeRef = useRef<number>(-Infinity);
+  const jackpotQueueRef = useRef<number[]>([]);
   const gameStateRef = useRef<GameState>(gameState);
 
   // Sync ref with state
@@ -112,6 +115,9 @@ const App: React.FC = () => {
     physicsTimeRef.current = 0;
     lastScoreTimeRef.current = 0;
     lastBonusDecayTimeRef.current = 0;
+    lastJackpotTimeRef.current = -Infinity;
+    jackpotQueueRef.current = [];
+    setQueuedJackpots(0);
 
     // Pre-fill the machine with standard chips
     const initialCoins: CoinData[] = Array.from({ length: 60 }).map((_, i) => ({
@@ -181,8 +187,8 @@ const App: React.FC = () => {
     const extenderLevel = extender ? extender.level : 0;
     const dropWidth = MACHINE_DIMENSIONS.baseDropWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
     const bedWidth = MACHINE_DIMENSIONS.baseWidth + (extenderLevel * MACHINE_DIMENSIONS.widthPerLevel);
-    const bedAreaScale = (bedWidth * MACHINE_DIMENSIONS.bedLength) / (MACHINE_DIMENSIONS.baseWidth * MACHINE_DIMENSIONS.bedLength);
-    const maxJackpotCoins = Math.max(1, Math.round(12 * bedAreaScale));
+    const bedWidthScale = bedWidth / MACHINE_DIMENSIONS.baseWidth;
+    const maxJackpotCoins = Math.max(1, Math.round(12 * bedWidthScale));
     const jackpotCoins = Math.min(maxJackpotCoins, Math.max(1, Math.round(10 * bonusMult)));
     const newCoins: CoinData[] = Array.from({ length: jackpotCoins }).map(() => {
       const xPos = (Math.random() - 0.5) * dropWidth;
@@ -201,6 +207,28 @@ const App: React.FC = () => {
       coinOrder: [...prev.coinOrder, ...newCoins.map(coin => coin.id)]
     }));
   }, []);
+
+  const enqueueJackpot = useCallback((bonusLevel: number) => {
+    jackpotQueueRef.current.push(bonusLevel);
+    setQueuedJackpots(jackpotQueueRef.current.length);
+  }, []);
+
+  useEffect(() => {
+    if (gameState.phase !== GamePhase.PLAYING || !isTabActive) return;
+
+    const interval = setInterval(() => {
+      if (jackpotQueueRef.current.length === 0) return;
+      const now = physicsTimeRef.current;
+      if (now - lastJackpotTimeRef.current < 3) return;
+
+      const nextLevel = jackpotQueueRef.current.shift();
+      lastJackpotTimeRef.current = now;
+      setQueuedJackpots(jackpotQueueRef.current.length);
+      if (nextLevel !== undefined) triggerJackpot(nextLevel);
+    }, 100);
+
+    return () => clearInterval(interval);
+  }, [gameState.phase, isTabActive, triggerJackpot]);
 
   // --- COIN MECHANICS HANDLERS ---
 
@@ -323,10 +351,7 @@ const App: React.FC = () => {
     if (newBonus >= 100) {
       newBonus = 0;
       nextBonusLevel = state.bonusLevel + 1;
-      // Trigger the jackpot effect (now safely once)
-      setTimeout(() => {
-        triggerJackpot(nextBonusLevel);
-      }, 0);
+      enqueueJackpot(nextBonusLevel);
     }
 
     setGameState(prev => ({
@@ -351,6 +376,9 @@ const App: React.FC = () => {
     } else {
       setGameState(prev => ({ ...prev, phase: GamePhase.GAME_OVER }));
     }
+    jackpotQueueRef.current = [];
+    setQueuedJackpots(0);
+    lastJackpotTimeRef.current = -Infinity;
   };
 
   const nextRound = () => {
@@ -445,6 +473,7 @@ const App: React.FC = () => {
             onEndRound={handleRoundEnd}
             timeScale={timeScale}
             setTimeScale={setTimeScale}
+            queuedJackpots={queuedJackpots}
           />
         )}
 
@@ -467,6 +496,9 @@ const App: React.FC = () => {
               onClick={() => {
                 setGameState(INITIAL_STATE);
                 setCoinState({ coinMap: new Map(), coinOrder: [] });
+                jackpotQueueRef.current = [];
+                setQueuedJackpots(0);
+                lastJackpotTimeRef.current = -Infinity;
               }}
               className="flex items-center gap-2 px-6 py-3 bg-white text-red-900 font-bold hover:bg-gray-200"
             >

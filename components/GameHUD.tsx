@@ -10,6 +10,7 @@ interface GameHUDProps {
   onEndRound: () => void;
   timeScale: number;
   setTimeScale: (scale: number) => void;
+  queuedJackpots: number;
 }
 
 // Sub-component to handle individual coin button logic with the hook
@@ -57,7 +58,7 @@ const CoinDropButton: React.FC<{
   );
 };
 
-const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, timeScale, setTimeScale }) => {
+const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, timeScale, setTimeScale, queuedJackpots }) => {
   const progress = Math.min(100, (gameState.score / gameState.targetScore) * 100);
   const bonusProgress = Math.min(100, gameState.bonus);
 
@@ -83,11 +84,14 @@ const GameHUD: React.FC<GameHUDProps> = ({ gameState, onDrop, onEndRound, timeSc
 
             {/* Bonus Momentum Meter */}
             <div className="bg-slate-900/80 border border-yellow-500/30 p-2 rounded-lg backdrop-blur flex items-center gap-3">
-                <div className="text-yellow-400 font-bold text-xs uppercase flex items-center gap-1 min-w-[80px]">
+                <div className="text-yellow-400 font-bold text-xs uppercase flex items-center gap-1">
                     <Zap size={14} className={bonusProgress > 80 ? 'animate-pulse' : ''}/> Bonus
                 </div>
                 <div className="px-2 py-1 rounded bg-yellow-500/20 border border-yellow-400/40 text-yellow-200 text-xs font-mono min-w-[44px] text-center">
                   {gameState.bonusLevel}x
+                </div>
+                <div className="px-2 py-1 rounded bg-yellow-500/10 border border-yellow-400/30 text-yellow-200 text-xs font-mono min-w-[64px] text-center">
+                  Queue {queuedJackpots}
                 </div>
                 <div className="flex-grow h-2 bg-gray-800 rounded-full overflow-hidden border border-gray-700 relative">
                     <div 
